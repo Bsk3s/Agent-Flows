@@ -741,49 +741,6 @@ async def get_session_info(session_id: str):
     
     return session.get_session_stats()
 
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    """Enhanced WebSocket endpoint supporting both text and binary messages for voice agent interactions"""
-    await websocket.accept()
-    session: Optional[AgentSession] = None
-    
-    logger.info(f"🔌 New WebSocket connection from user {user_id}")
-    
-    try:
-        while True:
-            # Handle both text and binary messages
-            try:
-                # Try to receive text message first
-                message = await asyncio.wait_for(websocket.receive(), timeout=0.1)
-                
-                if message["type"] == "websocket.receive":
-                    if "text" in message:
-                        # Handle text message (control messages)
-                        session = await handle_text_message(websocket, session, message["text"], user_id)
-                    elif "bytes" in message:
-                        # Handle binary message (audio data)
-                        await handle_binary_message(websocket, session, message["bytes"])
-                    
-            except asyncio.TimeoutError:
-                # No message received, but process any queued messages from event handlers
-                pass
-            except WebSocketDisconnect:
-                logger.info(f"🔌 Client {user_id} disconnected")
-                break
-            except Exception as e:
-                logger.error(f"Error receiving message: {e}")
-                break
-            
-            # Process any queued messages from Deepgram event handlers
-            if session:
-                await session._process_queued_messages()
-                
-    except Exception as e:
-        logger.error(f"WebSocket error for user {user_id}: {e}")
-    finally:
-        if session:
-            await voice_backend.cleanup_session(session.session_id)
-            logger.info(f"🧹 Cleaned up session for user {user_id}")
 
 @app.websocket("/ws/audio")
 async def audio_websocket_endpoint(websocket: WebSocket):
